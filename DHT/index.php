@@ -97,7 +97,7 @@ body {
 
 .fK {
 	height:39px;
-	width:138px;
+	width:145px;
 	float:right;
 	margin-right:10px;
 	overflow:hidden;
@@ -109,23 +109,40 @@ body {
 <script>
 	$(document).ready(function() {
 		// Toggle the dropdown menu's
-		$(".dropdown .button, .dropdown button").click(function () {
+		$(".dropdown .ddb,.sF").click(function () {
+			var CloseAction = false;
+			if ($(this).find('span.toggle').hasClass('active'))
+				CloseAction = true;
 			// hide any open menus (Yuneekguy)
 			$('.dropdown-slider').slideUp();
 			$('span.toggle').removeClass('active');
 			
-			if ($(this).find('span.toggle').hasClass('active'))
-			{
-				$('.dropdown-slider').slideUp();
-				$('span.toggle').removeClass('active');
+			if (CloseAction)
+				return false;
+				
+			// open selected dropown
+			alert($(this).attr('class'));
+			if ($(this).attr('class') == 'sF')
+				
+			var parent = $(this).parent().parent().parent().parent();
+			var dd_slider = parent.find('.Su').find('.dropdown-slider');
+			dd_slider.slideToggle('fast');
+			$(this).find('span.toggle').toggleClass('active');
+			
+			if (dd_slider.text().indexOf(' - ') == -1)
+				return false;
+				
+			var temp = '';
+			var content = dd_slider.text().split(' - ');
+			dd_slider.text('');
+			
+			for (var i in content)
+			{	
+				temp = '';
+				temp = '<p>' + content[i] + '</p>';
+				dd_slider.append(temp);
 			}
-			else
-			{
-				// open selected dropown
-				var parent = $(this).parent().parent().parent().parent();
-				parent.find('.Su').find('.dropdown-slider').slideToggle('fast');
-				$(this).find('span.toggle').toggleClass('active');
-			}
+			
 			
 			return false;
 		});
@@ -162,7 +179,7 @@ body {
 				</div>
 				<div class='tA'>
 					<div class='fK'>
-						<a href="#" class="button"><span class="label">File</span><span class="toggle"></span></a>
+						<a href="#" class="button ddb"><span class="label">Files</span><span class="toggle"></span></a>
 						<a href="#" class="button" title=".icon185 - Thunder"><span class="icon icon185"></span></a>
 					</div>
 				</div>
@@ -183,7 +200,7 @@ body {
 				</div>
 				<div class='tA'>
 					<div class='fK'>
-						<a href="#" class="button"><span class="label">Files</span><span class="toggle"></span></a>
+						<a href="#" class="button ddb"><span class="label">Files</span><span class="toggle"></span></a>
 						<a href="#" class="button" title=".icon185 - Thunder"><span class="icon icon185"></span></a>
 					</div>
 				</div>
