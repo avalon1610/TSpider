@@ -49,7 +49,7 @@ function queryContent(&$connection,$query_id)
 {
     if ($connection == NULL)
     {
-        $connection = mysql_connect('192.168.5.1','root','1qaz2wsx');
+        $connection = mysql_connect('127.0.0.1','root','05728606z');
         if (!$connection)
             die('Could not connect:'.mysql_error());
 		mysql_query("SET NAMES utf8");
@@ -77,6 +77,7 @@ function display($keyword,$page,$cl)
 	$response = "";
 	if ($keyword)
 	{
+		$cl->SetLimits(($page-1)*10,10);
    		$res = $cl->Query ( $keyword, "*" );    //"*"表示在所有索引里面同时搜索，"索引名称（例如test或者test,test2）"则表示搜索指定的
     	$connection = NULL;
 		$response .= "<div id='Content'>";
@@ -118,7 +119,8 @@ EOT;
 			$params = array('total_rows'=>$res['total_found'],
 							'method'=>'ajax',
 							'ajax_func_name'=>'goToPage',
-							'now_page'=>$page
+							'now_page'=>$page,
+							'list_rows'=>10
 					);
 			$page = new Core_Lib_Page($params);
 			$response .= $page->show(1);
@@ -133,7 +135,7 @@ EOT;
 //handle ajax request, changing page etc.
 if (isAjax())
 {
-	echo display($keyword,1,$cl);
+	echo display($keyword,$page,$cl);
 	return;
 }
 
@@ -174,6 +176,7 @@ body {
 	width: 600px;
 	height: auto;
 	margin:10px 5px 10px 5px;
+	overflow: hidden;
 }
 
 .iP {
@@ -243,75 +246,69 @@ dd:hover {
 </style>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script>
-	$(document).ready(function() {
-		// Toggle the dropdown menu's
-		$(".dropdown .ddb,.sF").click(function () {
-			var b_click_fbutton = true;
-			if ($(this).attr('class') == 'sF')
-				b_click_fbutton = false; 
+	$(document).on('click','.dropdown .ddb,.sF',function(){
+		var b_click_fbutton = true;
+		if ($(this).attr('class') == 'sF')
+			b_click_fbutton = false; 
 
-			var CloseAction = false;
-			if (b_click_fbutton)
-			{
-				if ($(this).find('span.toggle').hasClass('active'))
-				CloseAction = true;
-			}
-			else
-			{ 
-				if ($(this).parent().parent().find('.tA').find('.fK').find('span.toggle').hasClass('active'))
-				CloseAction = true;
-			}
+		var CloseAction = false;
+		if (b_click_fbutton)
+		{
+			if ($(this).find('span.toggle').hasClass('active'))
+			CloseAction = true;
+		}
+		else
+		{ 
+			if ($(this).parent().parent().find('.tA').find('.fK').find('span.toggle').hasClass('active'))
+			CloseAction = true;
+		}
 
-			// hide any open menus (Yuneekguy)
-			$('.dropdown-slider').slideUp();
-			$('span.toggle').removeClass('active');
-	
-			if (CloseAction)
-				return false;
-		
-			// open selected dropown
-			var parent;
-			if (b_click_fbutton)
-			{
-				parent = $(this).parent().parent().parent().parent();
-				$(this).find('span.toggle').toggleClass('active');
-			}
-			else
-			{
-				parent = $(this).parent().parent().parent();
-				parent.find('.mM').find('.tA').find('.fK').find('span.toggle').toggleClass('active');
-			}
+		// hide any open menus (Yuneekguy)
+		$('.dropdown-slider').slideUp();
+		$('span.toggle').removeClass('active');
 
-			//alert(parent.attr('class'));
-			var dd_slider = parent.find('.Su').find('.dropdown-slider');
-			dd_slider.slideToggle('fast');
-			
-			if (dd_slider.has('dl').length != 0)
-				return false;
-
-			var temp = '';
-			var content = dd_slider.text().split('\n');
-			dd_slider.text('');
-		
-			dd_slider.append('<dl>');
-			dl = dd_slider.find('dl');
-			for (var i in content)
-			{	
-				if (content[i].indexOf(' - ') == -1)
-					temp = '<dt>' + content[i] + '</dt>';
-				else
-					temp = '<dd>' + content[i] + '</dd>';
-				dl.append(temp);
-			}
-			
+		if (CloseAction)
 			return false;
-		});
-							
-	// Launch TipTip tooltip
-	//$('.tiptip a.button, .tiptip button').tipTip();
-						
-	});
 	
+		// open selected dropown
+		var parent;
+		if (b_click_fbutton)
+		{
+			parent = $(this).parent().parent().parent().parent();
+			$(this).find('span.toggle').toggleClass('active');
+		}
+		else
+		{
+			parent = $(this).parent().parent().parent();
+			parent.find('.mM').find('.tA').find('.fK').find('span.toggle').toggleClass('active');
+		}
+
+		//alert(parent.attr('class'));
+		var dd_slider = parent.find('.Su').find('.dropdown-slider');
+		dd_slider.slideToggle('fast');
+		
+		if (dd_slider.has('dl').length != 0)
+			return false;
+
+		var temp = '';
+		var content = dd_slider.text().split('\n');
+		dd_slider.text('');
+	
+		dd_slider.append('<dl>');
+		dl = dd_slider.find('dl');
+		for (var i in content)
+		{	
+			if (content[i].indexOf(' - ') == -1)
+				temp = '<dt>' + content[i] + '</dt>';
+			else
+				temp = '<dd>' + content[i] + '</dd>';
+			dl.append(temp);
+		}
+		
+		return false;
+					
+	});
+
 	// Close open dropdown slider by clicking elsewhwere on page
 	$(document).bind('click', function (e) {
 		if (e.target.id != $('.dropdown').attr('class')) {
@@ -322,10 +319,12 @@ dd:hover {
 
 	function goToPage(page)
 	{
-		url = '?page='+page;
+		var keyword = $('#search_text').attr('value');
+		url = '?page='+page+'&q='+keyword;
 		$.get(url,function(data){
-			$('.content').text('');
-			$('.content').append(data);
+			$('#Content').text('');
+			$('#Content').append(data);
+			$('body').animate({scrollTop:0}, 'slow'); 
 		});
 	}
 
