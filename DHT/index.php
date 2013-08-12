@@ -49,7 +49,7 @@ function queryContent(&$connection,$query_id)
 {
     if ($connection == NULL)
     {
-        $connection = mysql_connect('192.168.5.1','root','1qaz2wsx');
+        $connection = mysql_connect('127.0.0.1','root','05728606z');
         if (!$connection)
             die('Could not connect:'.mysql_error());
 		mysql_query("SET NAMES utf8");
@@ -307,6 +307,7 @@ dd:hover {
 			dl.append(temp);
 		}
 		
+		$('dd').highlight($('#search_text').attr('value'));
 		return false;
 					
 	});
@@ -321,7 +322,7 @@ dd:hover {
 
 	$(document).ready(function(){
 		var keyword = $('#search_text').attr('value');
-		$('.sF,dd,dt').highlight(keyword);
+		$('.dF').highlight(keyword);
 	});
 
 	function goToPage(page)
@@ -337,6 +338,7 @@ dd:hover {
 	}
 
 </script>
+<title>搜种子网</title>
 </head>
 <body>
  	<div id='search_bar'>

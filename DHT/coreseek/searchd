@@ -1,0 +1,1 @@
+/usr/local/coreseek/bin/searchd -c csft_mysql.conf
