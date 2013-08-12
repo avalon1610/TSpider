@@ -49,7 +49,7 @@ function queryContent(&$connection,$query_id)
 {
     if ($connection == NULL)
     {
-        $connection = mysql_connect('127.0.0.1','root','05728606z');
+        $connection = mysql_connect('192.168.5.1','root','1qaz2wsx');
         if (!$connection)
             die('Could not connect:'.mysql_error());
 		mysql_query("SET NAMES utf8");
@@ -238,6 +238,7 @@ dd:hover {
 	white-space:normal;
 }
 
+.highlight { background-color: yellow }
 .page {font:12px/16px arial;}
 .page span{float:left;margin:0px 3px;}
 .page a{float:left;margin:0 3px;border:1px solid #ddd;padding:3px 7px; text-decoration:none;color:#666}
@@ -245,6 +246,7 @@ dd:hover {
 
 </style>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+<script src="jquery.highlight.js"></script>
 <script>
 	$(document).on('click','.dropdown .ddb,.sF',function(){
 		var b_click_fbutton = true;
@@ -317,6 +319,11 @@ dd:hover {
 		}
 	});
 
+	$(document).ready(function(){
+		var keyword = $('#search_text').attr('value');
+		$('.sF,dd,dt').highlight(keyword);
+	});
+
 	function goToPage(page)
 	{
 		var keyword = $('#search_text').attr('value');
@@ -325,6 +332,7 @@ dd:hover {
 			$('#Content').text('');
 			$('#Content').append(data);
 			$('body').animate({scrollTop:0}, 'slow'); 
+			$('.iP').highlight(keyword);
 		});
 	}
 
