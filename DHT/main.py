@@ -3,12 +3,10 @@ from twisted.internet import protocol
 from twisted.internet.protocol import DatagramProtocol,Factory
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
-from twisted.web import client
 import string,random,struct,logging
-# import hashlib
 import datetime,zlib,sys
 import chardet
-from twisted.web.client import downloadPage,getPage
+from twisted.web.client import getPage
 from twisted.enterprise import adbapi
  
 DB_name = 'test'
@@ -16,21 +14,6 @@ DB_user = 'root'
 DB_passwd = '1qaz2wsx'
 DB_host = '127.0.0.1'
 
-#################################
-# CREATE TABLE `dht` (
-# 	`Hash` VARCHAR(50) NOT NULL,
-# 	`Name` VARCHAR(200) NOT NULL,
-# 	`Description` TEXT NULL,
-# 	`Updatetime` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-# 	`Id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-# 	`Rank` INT(10) UNSIGNED NOT NULL DEFAULT '0',
-# 	PRIMARY KEY (`Hash`),
-# 	UNIQUE INDEX `Hash` (`Hash`),
-# 	UNIQUE INDEX `Id` (`Id`)
-# )
-# COLLATE='utf8_general_ci'
-# ENGINE=InnoDB;
-#################################
 GOOD = 'good'
 DUBIOUS = 'dubious'
 BAD = 'bad'
@@ -119,7 +102,8 @@ class TorrentClient(protocol.Protocol):
 
 	def connectionLost(self,reason):
 		logging.warning('connection lost:%s' % reason)
-		reactor.stop()
+		if reactor.running:
+			reactor.stop()
 
 class TorrentClientFactory(protocol.ClientFactory):
 	protocol = TorrentClient
@@ -163,7 +147,8 @@ class TorrentClientFactory(protocol.ClientFactory):
 
 	def clientConnectionLost(self, connector, reason):
 		logging.info('connection lost:%s' % reason.getErrorMessage())
-		reactor.stop()
+		if reactor.running:
+			reactor.stop()
  
 class NodeService(object):
 	router = {}
@@ -304,7 +289,8 @@ class NodeService(object):
 			elif len(result) > number:
 				# print 'error'
 				logging.error('get error')
-				reactor.stop()
+				if reactor.running:
+					reactor.stop()
 
  		index = 1
  		if len(temp_nodes) > 8:
@@ -316,7 +302,8 @@ class NodeService(object):
  			return temp_nodes
  		else:
  			print temp_nodes
- 			reactor.stop()
+ 			if reactor.running:
+				reactor.stop()
  			return None
  
 	def ProcessData(self,node_info,src_host,src_port):
@@ -396,7 +383,10 @@ class NodeService(object):
 
 	def ParseTorrent(self,parameter):
 		peer_id,info_hash,host,port = parameter
-		
+
+		# f = TorrentClientFactory(info_hash,peer_id,(host,port))
+		# logging.info('trying to connect %s:%s' % (host,port))
+		# reactor.connectTCP(host,port,f)
 		filename = ''
 		for i in info_hash:
 			filename += ('%02X' % ord(i))
@@ -405,9 +395,7 @@ class NodeService(object):
 		Hash = filename
 		filename += '.torrent'
 
-		# f = TorrentClientFactory(info_hash,peer_id,(host,port))
-		# logging.info('trying to connect %s:%s' % (host,port))
-		# reactor.connectTCP(host,port,f)
+		
 		def ParseTorrent(torrent):
 			# to do
 			logging.info('download torrent success')
@@ -444,11 +432,18 @@ class NodeService(object):
 						description += l
 						description += '\n'
 
-			encoding = chardet.detect(name)['encoding']
-		 	name = name.decode(encoding,'replace').encode('utf-8')
+			try:
+				encoding = chardet.detect(name)['encoding']
+		 		name = name.decode(encoding).encode('utf-8')
+		 	except UnicodeError:
+		 		name = name.decode('utf-8','replace').encode('utf-8')
+
 		 	if description:
-			 	encoding = chardet.detect(description)['encoding']
-			 	description = description.decode(encoding,'replace').encode('utf-8')
+		 		try:
+			 		encoding = chardet.detect(description)['encoding']
+			 		description = description.decode(encoding).encode('utf-8')
+			 	except UnicodeError:
+			 		description = description.decode('utf-8','replace').encode('utf-8')
 
 			def printResult(result):
 				logging.info('insert [%s] to db success]' % name.decode('utf-8'))
@@ -456,9 +451,10 @@ class NodeService(object):
 
 			def printError(error):
 				print error
-				reactor.stop()
+				if reactor.running:
+					reactor.stop()
 
-			query_string = '''insert into test.DHT (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
+			query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
 				Hash,name,description)
 			logging.info('description length:%d' % len(description))
 			self.cp.runOperation(query_string).addCallbacks(printResult,printError)
@@ -572,7 +568,8 @@ class NodeService(object):
 	def OnError(self,reason):
 		logging.error('======GOT ERROR======')
 		logging.error(reason)
-		reactor.stop()
+		if reactor.running:
+			reactor.stop()
 
 def main():
 	FORMAT = '[%(levelname)s] %(message)s'
@@ -589,8 +586,8 @@ def test():
 	sys.setdefaultencoding('utf-8')
 	cp = adbapi.ConnectionPool('MySQLdb',db=DB_name,user=DB_user,passwd=DB_passwd,host=DB_host,charset="utf8")
 	cp.runOperation("SET NAMES utf8");
-	Hash = '43623F44DCE0EA8C97DBF045445CA64EBC2B935E'
-	fileHandle = open('%s.torrent' % Hash,'rb')
+	Hash = '3C65597CFF3C6A682606CEB68EF77469B8D85CFC'
+	fileHandle = open('e:/projects/%s.torrent' % Hash,'rb')
 	tor = fileHandle.read()
 	a = bdecode(tor)
 
@@ -625,32 +622,67 @@ def test():
 				description += l
 				description += '\n'
 
- 	print sys.getdefaultencoding()
+	try:
+		encoding = chardet.detect(name)['encoding']
+		print 'name encoding',encoding
+ 		name = name.decode(encoding).encode('utf-8')
+ 	except UnicodeError:
+ 		name = name.decode('utf-8').encode('utf-8')
 
-	encoding = chardet.detect(name)['encoding']
- 	name = name.decode(encoding).encode('utf-8')
- 	encoding = chardet.detect(description)['encoding']
- 	print encoding
- 	description = description.decode(encoding).encode('utf-8')
- 	print description
- 	
+ 	print name
 
+ 	if description:
+ 		encoding = chardet.detect(description)['encoding']
+ 		print 'description encoding',encoding
+ 		description = description.decode(encoding).encode('utf-8')
+ 		
 	def printResult(result):
 		logging.info('insert [%s] to db success]' % name)
-		reactor.stop()
+		if reactor.running:
+			reactor.stop()
 
 	def printError(error):
 		print error
-		reactor.stop()
+		if reactor.running:
+			reactor.stop()
 
-	query_string = '''insert into test.DHT (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
+	query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
 		Hash,name,description)
 	# print query_string
 	cp.runOperation(query_string).addCallbacks(printResult,printError)
 	reactor.run()
 	
 	#==========================================================
-		
+
+class TorrentProcess(protocol.ProcessProtocol):
+	def __init__(self):
+		self.input = 97
+	def connectionMade(self):
+		print 'Connection Made.'
+		self.send('a')
+	def send(self,data):
+		self.transport.write(data)
+		print 'Sent:',chr(self.input)
+		self.input += 1
+	def outReceived(self,data):
+		print '[torrent]:',data
+		reactor.callLater(.1,self.send)
+	def errReceived(self,data):
+		print '[torrent error]:',data
+	# def inConnectionLost(self):
+	# 	print 'Error: inConnectionLost'
+	# def outConnectionLost(self):
+	# 	print 'Error: outConnectionLost'
+	# def errConnectionLost(self):
+	# 	print 'Error: errConnectionLost'
+	# def processExited(self,reason):
+	# 	print 'Process exit status:',reason.value.exitCode
+	def processEnded(self,reason):
+		print 'Process end status',reason.value.exitCode
+		if reactor.running:
+			reactor.stop()
+
+
 if __name__ == '__main__':
  
 	# ('router.bittorrent.com'), 6881));
@@ -658,4 +690,8 @@ if __name__ == '__main__':
 	# ('router.bitcomet.com'), 6881));
 
 	# test()
-	main()
+	# main()
+	tp = TorrentProcess()
+	cmd = ['d:\\python27\\python.exe','E:\\Projects\\TSpider\\DHT\\torrent.py']
+	reactor.spawnProcess(tp,cmd[0],cmd)
+	reactor.run()
