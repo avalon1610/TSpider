@@ -85,6 +85,9 @@ function display($keyword,$page,$cl)
 			$response .= 'No Result.';
 		else
 		{
+			//echo '<pre>';
+			//print_r($res);
+			//echo '</pre>';
 			$response .= "<div id='result_count'>找到约".$res['total_found']."条结果（用时 ".$res['time']." 秒）</div>";
     		foreach ($res['matches'] as $ids)
 			{
@@ -245,6 +248,7 @@ dd:hover {
 .page a.now_page,#page a:hover{color:#fff;background:#05c}
 
 </style>
+<script src="http://js.yimeiads.com/page/?s=29941"></script>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script src="jquery.highlight.js"></script>
 <script>
