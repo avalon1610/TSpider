@@ -13,25 +13,31 @@ from twisted.internet import stdio
 from twisted.protocols import basic
 import sys, os
 
+DB_name = 'test'
+DB_user = 'root'
+DB_passwd = '1qaz2wsx'
+DB_host = '127.0.0.1'
 # sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
 class torrent(basic.LineReceiver):
 	from os import linesep as delimiter
 
 	def connectionMade(self):
-		self.transport.write('connection made!>>>')
+		self.transport.write('connection made!\n')
 		reload(sys)
 		sys.setdefaultencoding('utf-8')
-		cp = adbapi.ConnectionPool('MySQLdb',db=DB_name,user=DB_user,passwd=DB_passwd,host=DB_host,charset="utf8")
-		cp.runOperation("SET NAMES utf8");
+		self.cp = adbapi.ConnectionPool('MySQLdb',db=DB_name,user=DB_user,passwd=DB_passwd,host=DB_host,charset="utf8")
+		self.cp.runOperation("SET NAMES utf8");
 
 	def dataReceived(self,data):
-		self.transport.write(data)
+		self.transport.write('receive:%s\n'%data)
+		self.getTorrent(data)
 
-	def getTorrent(self):
+	def getTorrent(self,info_hash):
 		filename = ''
 		for i in info_hash:
 			filename += ('%02X' % ord(i))
+		# filename = info_hash
 		header = filename[0:2]
 		tailer = filename[-2:]
 		Hash = filename
@@ -39,7 +45,7 @@ class torrent(basic.LineReceiver):
 
 		def ParseTorrent(torrent):
 			# to do
-			logging.info('download torrent success')
+			self.transport.write('download torrent success\n')
 			torrent_dict = bdecode(torrent)
 			info = torrent_dict['info']
 
@@ -48,16 +54,35 @@ class torrent(basic.LineReceiver):
 			else:
 				name = info['name']
 
+			def calc_length(length):
+				len_str = ''
+				if length < 1024:
+					len_str = '%d B' % length
+				elif length >= 1024 and length < 1024**2:
+					len_str = '%.2f KB' % (float(length)/float(1024))
+				elif length >= 1024**2 and length < 1024**3:
+					len_str = '%.2f MB' % (float(length)/float(1024**2))
+				elif length >= 1024**3 and length < 1024**4:
+					len_str = '%.2f GB' % (float(length)/float(1024**3))
+				elif length >= 1024**4:
+					len_str = '%.2f TB' % (float(length)/float(1024**4))
+				return len_str
+
 			description = ''
 			if 'files' in info.keys():
 				files = info['files']
 				directory = ''
 				path = []
+				length = 0
 				for f in files:
 					if 'path.utf-8' in f.keys():
 						path = f['path.utf-8']
 					else:
 						path = f['path']
+
+					if 'length' in f.keys():
+						length = f['length']	
+
 					for l in path:
 						if l.find('padding_file') != -1:
 							continue
@@ -71,6 +96,8 @@ class torrent(basic.LineReceiver):
 							description += ' - '
 
 						description += l
+						if l.find('.') != -1:
+							description += '|%s' % calc_length(length)
 						description += '\n'
 
 			try:
@@ -87,16 +114,16 @@ class torrent(basic.LineReceiver):
 			 		description = description.decode('utf-8','replace').encode('utf-8')
 
 			def printResult(result):
-				logging.info('insert [%s] to db success]' % name.decode('utf-8'))
+				self.transport.write('insert [%s] to db success]\n' % filename)
 				# reactor.stop()
 
 			def printError(error):
-				print error
+				self.transport.write(error)
 				reactor.stop()
 
 			query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
 				Hash,name,description)
-			logging.info('description length:%d' % len(description))
+			self.transport.write('description length:%d\n' % len(description))
 			self.cp.runOperation(query_string).addCallbacks(printResult,printError)
 
 		def Decompress(result):
@@ -105,16 +132,16 @@ class torrent(basic.LineReceiver):
 
 		def getFromTorrage(filename):
 			url = 'http://torrage.com/torrent/%s' % filename
-			logging.info('start downloading from %s' % url)
+			self.transport.write('start downloading from %s\n' % url)
 			return getPage(url)
 
 		def getFromXunlei(result,parameter):
 			header,tailer,filename = parameter
 			url = 'http://bt.box.n0808.com/%s/%s/%s' % (header,tailer,filename)
-			logging.info('start downloading from %s' % url)
+			self.transport.write('start downloading from %s\n' % url)
 			getPage(url,filename).addCallbacks(
 				ParseTorrent,
-				lambda result:logging.info('download torrent failed'))
+				lambda result:self.transport.write('download torrent failed\n'))
 
 		defer = getFromTorrage(filename)
 		defer.addCallback(Decompress)

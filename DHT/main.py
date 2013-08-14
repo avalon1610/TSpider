@@ -8,11 +8,6 @@ import datetime,zlib,sys
 import chardet
 from twisted.web.client import getPage
 from twisted.enterprise import adbapi
- 
-DB_name = 'test'
-DB_user = 'root'
-DB_passwd = '1qaz2wsx'
-DB_host = '127.0.0.1'
 
 GOOD = 'good'
 DUBIOUS = 'dubious'
@@ -156,17 +151,25 @@ class NodeService(object):
 		self.begin_host = host
 		self.begin_port = port
 		self.query = DHTQuery()
-		# self.id = '\x67\xda\x09\x16\x96\xcc\xf7\x42\x6b\x81\x7a\x0c\x4f\x50\xe3\x95\xb1\x78\x8b\x22'
-		self.id = ''.join(random.choice(string.printable) for x in xrange(20))
 
-		self.cp = adbapi.ConnectionPool('MySQLdb',db=DB_name,user=DB_user,passwd=DB_passwd,host=DB_host,charset="utf8")
-		self.cp.runOperation("SET NAMES utf8");
+		self.tp = TorrentProcess()
+		cmd = ['d:\\python27\\python.exe','E:\\Projects\\TSpider\\DHT\\torrent.py']
+		reactor.spawnProcess(self.tp,cmd[0],cmd)
+		
+		#generate 100 random id
+		self.id_list = []
+		for a in range(0,0x64):
+			id = struct.pack('B',a) + ''.join(random.choice(string.printable) for x in xrange(19))
+			self.id_list.append(id)
 
-		logging.info('generate id:%r' %  self.id)
+		for i in self.id_list:
+			logging.info('generate id:%r' % i)
 		reactor.resolve(self.begin_host).addCallback(self.gotIP)
  
 	def ping(self,host,port):
-		data = self.query.encode(t='aa',y='q',q='ping',a={'id':self.id})
+		random_id = self.id_list[0]
+		# random_id = random.choice(self.id_list)
+		data = self.query.encode(t='aa',y='q',q='ping',a={'id':random_id})
 		logging.info('ping: %s:%d' % (host,port))
 		self.protocol.sendDatagram(data,host,port)
  
@@ -175,12 +178,13 @@ class NodeService(object):
 		# id = '8dm6lzo8c3fk4bcgzeyi'
  
 		# mao si shi xunlei de id
-		if not id:
-			id = self.id
- 
-		data = self.query.encode(t='aa',y='q',q='find_node',a={'id':id,'target':id})
-		logging.debug('find_node: %s:%d' % (host,port))
-		self.protocol.sendDatagram(data,host,port)
+		for _id in self.id_list:
+			id = _id
+
+			data = self.query.encode(t='aa',y='q',q='find_node',a={'id':id,'target':id})
+			logging.debug('find_node: %s:%d' % (host,port))
+			self.protocol.sendDatagram(data,host,port)
+			break
 
 	def reverse_node(self,n):
 		a,b,c,d = n.IP.split('.')
@@ -200,7 +204,9 @@ class NodeService(object):
 			n = self.router[root_node][node_id]
 			random_nodes += self.reverse_node(n)
 		
-		reply_msg = {'id':self.id,'token':token,'nodes':random_nodes}
+		random_id = self.id_list[0]
+		# random_id = random.choice(self.id_list)
+		reply_msg = {'id':random_id,'token':token,'nodes':random_nodes}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
 		logging.info('reply data:%r' % data)
 		logging.info('reply_get_peers: %s:%d' % (node.IP,node.Port))
@@ -218,7 +224,6 @@ class NodeService(object):
  			r = ''
  			for s in d_str:
  				r += ('%x' % ord(s))
-
  			return int(r,16)
 
  		zero_node = info_hash[0]
@@ -383,102 +388,7 @@ class NodeService(object):
 
 	def ParseTorrent(self,parameter):
 		peer_id,info_hash,host,port = parameter
-
-		# f = TorrentClientFactory(info_hash,peer_id,(host,port))
-		# logging.info('trying to connect %s:%s' % (host,port))
-		# reactor.connectTCP(host,port,f)
-		filename = ''
-		for i in info_hash:
-			filename += ('%02X' % ord(i))
-		header = filename[0:2]
-		tailer = filename[-2:]
-		Hash = filename
-		filename += '.torrent'
-
-		
-		def ParseTorrent(torrent):
-			# to do
-			logging.info('download torrent success')
-			torrent_dict = bdecode(torrent)
-			info = torrent_dict['info']
-
-			if 'name.utf-8' in info.keys():
-				name = info['name.utf-8']
-			else:
-				name = info['name']
-
-			description = ''
-			if 'files' in info.keys():
-				files = info['files']
-				directory = ''
-				path = []
-				for f in files:
-					if 'path.utf-8' in f.keys():
-						path = f['path.utf-8']
-					else:
-						path = f['path']
-					for l in path:
-						if l.find('padding_file') != -1:
-							continue
-						if l.find('.') == -1:
-							# this is a directory
-							if (not directory) or (directory != l):
-								directory = l
-							else:
-								continue
-						else:
-							description += ' - '
-
-						description += l
-						description += '\n'
-
-			try:
-				encoding = chardet.detect(name)['encoding']
-		 		name = name.decode(encoding).encode('utf-8')
-		 	except UnicodeError:
-		 		name = name.decode('utf-8','replace').encode('utf-8')
-
-		 	if description:
-		 		try:
-			 		encoding = chardet.detect(description)['encoding']
-			 		description = description.decode(encoding).encode('utf-8')
-			 	except UnicodeError:
-			 		description = description.decode('utf-8','replace').encode('utf-8')
-
-			def printResult(result):
-				logging.info('insert [%s] to db success]' % name.decode('utf-8'))
-				# reactor.stop()
-
-			def printError(error):
-				print error
-				if reactor.running:
-					reactor.stop()
-
-			query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
-				Hash,name,description)
-			logging.info('description length:%d' % len(description))
-			self.cp.runOperation(query_string).addCallbacks(printResult,printError)
-	
-		def Decompress(result):
-			torrent = zlib.decompress(result,16+zlib.MAX_WBITS)
-			ParseTorrent(torrent)
-
-		def getFromTorrage(filename):
-			url = 'http://torrage.com/torrent/%s' % filename
-			logging.info('start downloading from %s' % url)
-			return getPage(url)
-
-		def getFromXunlei(result,parameter):
-			header,tailer,filename = parameter
-			url = 'http://bt.box.n0808.com/%s/%s/%s' % (header,tailer,filename)
-			logging.info('start downloading from %s' % url)
-			getPage(url,filename).addCallbacks(
-				ParseTorrent,
-				lambda result:logging.info('download torrent failed'))
-
-		defer = getFromTorrage(filename)
-		defer.addCallback(Decompress)
-		defer.addErrback(getFromXunlei,(header,tailer,filename))
+		self.tp.send(info_hash)
 
 	def reply_find_node(self,parameter):
 		transaction_ID,node = parameter
@@ -490,7 +400,9 @@ class NodeService(object):
 			n = self.router[root_node][node_id]
 			random_nodes += self.reverse_node(n)
 		
-		reply_msg = {'id':self.id,'nodes':random_nodes}
+		# random_id = random.choice(self.id_list)
+		random_id = self.id_list[0]
+		reply_msg = {'id':random_id,'nodes':random_nodes}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
 		logging.info('reply data:%r' % data)
 		logging.info('reply_find_node: %s:%d' % (node.IP,node.Port))
@@ -498,7 +410,9 @@ class NodeService(object):
 
 	def reply_ping(self,parameter):
 		transaction_ID,node = parameter
-		reply_msg = {'id':self.id}
+		# random_id = random.choice(self.id_list)
+		random_id = self.id_list[0]
+		reply_msg = {'id':random_id}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
 		logging.info('reply data:%r' % data)
 		logging.info('reply_ping: %s:%d' % (node.IP,node.Port))
@@ -581,6 +495,10 @@ def main():
 	reactor.run()
 
 def test():
+	DB_name = 'test'
+	DB_user = 'root'
+	DB_passwd = '1qaz2wsx'
+	DB_host = '127.0.0.1'
 	#====================test torrent===========================
 	reload(sys)
 	sys.setdefaultencoding('utf-8')
@@ -597,16 +515,33 @@ def test():
 	else:
 		name = info['name']
 
+	def calc_length(length):
+		len_str = ''
+		if length < 1024:
+			len_str = '%d B' % length
+		elif length >= 1024 and length < 1024**2:
+			len_str = '%.2f KB' % (float(length)/float(1024))
+		elif length >= 1024**2 and length < 1024**3:
+			len_str = '%.2f MB' % (float(length)/float(1024**2))
+		elif length >= 1024**3 and length < 1024**4:
+			len_str = '%.2f GB' % (float(length)/float(1024**3))
+		elif length >= 1024**4:
+			len_str = '%.2f TB' % (float(length)/float(1024**4))
+		return len_str
+
 	description = ''
 	if 'files' in info.keys():
 		files = info['files']
 		directory = ''
 		path = []
+		length = 0
 		for f in files:
 			if 'path.utf-8' in f.keys():
 				path = f['path.utf-8']
 			else:
 				path = f['path']
+			if 'length' in f.keys():
+				length = f['length']				
 			for l in path:
 				if l.find('padding_file') != -1:
 					continue
@@ -620,6 +555,8 @@ def test():
 					description += ' - '
 
 				description += l
+				if l.find('.') != -1:
+					description += '|%s' % calc_length(length)
 				description += '\n'
 
 	try:
@@ -648,35 +585,24 @@ def test():
 
 	query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
 		Hash,name,description)
-	# print query_string
-	cp.runOperation(query_string).addCallbacks(printResult,printError)
+	print query_string
+	# cp.runOperation(query_string).addCallbacks(printResult,printError)
 	reactor.run()
 	
 	#==========================================================
 
 class TorrentProcess(protocol.ProcessProtocol):
-	def __init__(self):
-		self.input = 97
 	def connectionMade(self):
 		print 'Connection Made.'
-		self.send('a')
+
 	def send(self,data):
 		self.transport.write(data)
-		print 'Sent:',chr(self.input)
-		self.input += 1
+		print 'Sent:',data
+		
 	def outReceived(self,data):
 		print '[torrent]:',data
-		reactor.callLater(.1,self.send)
 	def errReceived(self,data):
 		print '[torrent error]:',data
-	# def inConnectionLost(self):
-	# 	print 'Error: inConnectionLost'
-	# def outConnectionLost(self):
-	# 	print 'Error: outConnectionLost'
-	# def errConnectionLost(self):
-	# 	print 'Error: errConnectionLost'
-	# def processExited(self,reason):
-	# 	print 'Process exit status:',reason.value.exitCode
 	def processEnded(self,reason):
 		print 'Process end status',reason.value.exitCode
 		if reactor.running:
@@ -691,7 +617,4 @@ if __name__ == '__main__':
 
 	# test()
 	# main()
-	tp = TorrentProcess()
-	cmd = ['d:\\python27\\python.exe','E:\\Projects\\TSpider\\DHT\\torrent.py']
-	reactor.spawnProcess(tp,cmd[0],cmd)
-	reactor.run()
+	
