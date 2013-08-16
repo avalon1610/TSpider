@@ -131,6 +131,23 @@ EOT;
 		}
 
 		$response .= "</div><!--class Content-->";
+		/*
+		$response .= <<<EOT
+			<div class='adv' style='float:right;width:300px;'>
+				<script src="http://union.minigy.com/page/s.php?s=80092&w=300&h=250"></script>
+				<script>
+				(function(){
+				 	var referer = '';
+						if (window.parent!=window.self){
+								try{referer=parent.document.referer;}
+										catch(e){referer=document.referer;}}
+											else{referer=document.referer}
+												document.writeln('<iframe frameborder="0" scrolling="no" marginheight="0" width="300" height="300" marginwidth="0" src="http://union.rizhifu.com/adsIndex.php?adsid=16780&referer='+referer+'"></iframe>');
+												})();
+				</script>
+			</div>
+EOT;
+*/
 	}
 	return $response;
 }
@@ -180,6 +197,7 @@ body {
 	height: auto;
 	margin:10px 5px 10px 5px;
 	overflow: hidden;
+	float:left;
 }
 
 .iP {
@@ -248,7 +266,7 @@ dd:hover {
 .page a.now_page,#page a:hover{color:#fff;background:#05c}
 
 </style>
-<script src="http://js.yimeiads.com/page/?s=29941"></script>
+
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script src="jquery.highlight.js"></script>
 <script>
@@ -342,6 +360,9 @@ dd:hover {
 	}
 
 </script>
+<script>u_key='377509'</script>
+<script src="http://j.union.ijinshan.com/m.js"></script>
+
 <title>搜种子网</title>
 </head>
 <body>
@@ -354,7 +375,10 @@ dd:hover {
 <?php
 	echo display($keyword,1,$cl);
 ?>
-
+<div style='display:none;'>
+<script language="javascript" type="text/javascript" src="http://js.users.51.la/16206355.js"></script>
+<noscript><a href="http://www.51.la/?16206355" target="_blank"><img alt="&#x6211;&#x8981;&#x5566;&#x514D;&#x8D39;&#x7EDF;&#x8BA1;" src="http://img.users.51.la/16206355.asp" style="border:none" /></a></noscript>
+</div>
 </body>
 </html>
 
