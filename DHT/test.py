@@ -6,9 +6,8 @@ class QOTD(DatagramProtocol):
 		self.data = data
 
 	def sendDatagram(self):
-		print self.transport.getHost()
 		print '%d sending %s' % (self.host.port,self.data)
-		self.transport.write(self.data,('127.0.0.1',9999))
+		self.transport.write(self.data,('106.36.36.36',9999))
 
 	def datagramReceived(self, data, (host, port)):
 		# srchost = self.transport.getHost()

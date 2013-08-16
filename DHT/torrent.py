@@ -30,7 +30,7 @@ class torrent(basic.LineReceiver):
 		self.cp.runOperation("SET NAMES utf8");
 
 	def dataReceived(self,data):
-		self.transport.write('receive:%s\n'%data)
+		self.transport.write('receive:%r\n'%data)
 		self.getTorrent(data)
 
 	def getTorrent(self,info_hash):
@@ -46,7 +46,14 @@ class torrent(basic.LineReceiver):
 		def ParseTorrent(torrent):
 			# to do
 			self.transport.write('download torrent success\n')
-			torrent_dict = bdecode(torrent)
+			try:
+				torrent_dict = bdecode(torrent)
+			except:
+				defer = getFromTorrage(filename)
+				defer.addCallback(Decompress)
+				defer.addErrback(getFromXunlei,(header,tailer,filename))
+				return
+
 			info = torrent_dict['info']
 
 			if 'name.utf-8' in info.keys():
@@ -115,11 +122,9 @@ class torrent(basic.LineReceiver):
 
 			def printResult(result):
 				self.transport.write('insert [%s] to db success]\n' % filename)
-				# reactor.stop()
 
 			def printError(error):
-				self.transport.write(error)
-				reactor.stop()
+				self.transport.write('ERROR:%r\n' % error)
 
 			query_string = '''insert into test.dht (Hash,Name,Description,Rank) values ("%s","%s","%s",1) ON DUPLICATE KEY UPDATE Rank=Rank+1;''' % (
 				Hash,name,description)

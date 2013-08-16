@@ -45,7 +45,12 @@ class DHTQuery():
 		return bencode(msg)
  
 	def decode(self,msg):
-		result = bdecode(msg)
+		result = ''
+		try:
+			result = bdecode(msg)
+		except:
+			logging.warning('not a valid bencoded string')
+
 		return result
  
 class DHTNodeProtocol(DatagramProtocol):
@@ -57,18 +62,21 @@ class DHTNodeProtocol(DatagramProtocol):
 	def datagramReceived(self, data, (host, port)):
 		logging.debug("received %r from %s:%d" % (data, host, port))
 		# self.d.callback(self.query.decode(data))
-		self.service.ProcessData(self.query.decode(data),host,port)
+		self.service.ProcessData(self.query.decode(data),host,port,self.my_port)
  
 	def sendDatagram(self,data,host,port):
 		logging.debug('Data:%r' % data)
 		self.transport.write(data,(host,port))
+
+	def startProtocol(self):
+		self.my_port = self.transport.getHost().port
  
 class Nodes():
 	def __init__(self,NodeID,IP,Port):
 		self.NodeID = NodeID
 		self.IP = IP
 		self.Port = Port
-		self.search_time = 2
+		self.search_time = 1
 		self.healthy = GOOD
 		self.update_time = datetime.datetime.now()
  
@@ -147,6 +155,7 @@ class TorrentClientFactory(protocol.ClientFactory):
  
 class NodeService(object):
 	router = {}
+	protocol_list = {}
 	def __init__(self,host,port):
 		self.begin_host = host
 		self.begin_port = port
@@ -156,35 +165,36 @@ class NodeService(object):
 		cmd = ['d:\\python27\\python.exe','E:\\Projects\\TSpider\\DHT\\torrent.py']
 		reactor.spawnProcess(self.tp,cmd[0],cmd)
 		
-		#generate 100 random id
-		self.id_list = []
+		#generate 100 random id , {port : id}
+		self.id_list = {}
+		now_port = 6881
 		for a in range(0,0x64):
 			id = struct.pack('B',a) + ''.join(random.choice(string.printable) for x in xrange(19))
-			self.id_list.append(id)
+			self.id_list[now_port] = id
+			now_port += 1
 
-		for i in self.id_list:
-			logging.info('generate id:%r' % i)
+		print len(self.id_list)
+		for k,v in self.id_list.iteritems():
+			logging.info('generate id:[%d][%r]' % (k,v))
 		reactor.resolve(self.begin_host).addCallback(self.gotIP)
  
 	def ping(self,host,port):
-		random_id = self.id_list[0]
-		# random_id = random.choice(self.id_list)
+		random_port = random.choice([k for k,v in self.id_list.iteritems()])
+		random_id = self.id_list[random_port]
 		data = self.query.encode(t='aa',y='q',q='ping',a={'id':random_id})
-		logging.info('ping: %s:%d' % (host,port))
-		self.protocol.sendDatagram(data,host,port)
+		logging.debug('ping: %s:%d' % (host,port))
+		self.protocol_list[random_port].sendDatagram(data,host,port)
  
-	def find_node(self,host,port,id=None):
+	def find_node(self,host,port):
 		# id = ''.join(random.choice(string.lowercase+string.digits) for x in xrange(20))
 		# id = '8dm6lzo8c3fk4bcgzeyi'
  
 		# mao si shi xunlei de id
-		for _id in self.id_list:
-			id = _id
-
-			data = self.query.encode(t='aa',y='q',q='find_node',a={'id':id,'target':id})
+		for k,v in self.id_list.iteritems():
+			my_id = v
+			data = self.query.encode(t='aa',y='q',q='find_node',a={'id':my_id,'target':my_id})
 			logging.debug('find_node: %s:%d' % (host,port))
-			self.protocol.sendDatagram(data,host,port)
-			break
+			self.protocol_list[k].sendDatagram(data,host,port)
 
 	def reverse_node(self,n):
 		a,b,c,d = n.IP.split('.')
@@ -193,24 +203,26 @@ class NodeService(object):
 		return n.NodeID + address
  
 	def reply_get_peers(self,parameter):
-		
- 		transaction_ID,node,info_hash = parameter
+ 		transaction_ID,node,info_hash,my_port = parameter
 		token = ''.join(random.choice(string.lowercase) for x in xrange(8))
 		closest_dict = self.select_closest(info_hash)
 		random_nodes = ''
+
+		if not closest_dict:
+			return
 
 		for node_id in closest_dict:
 			root_node = node_id[0]
 			n = self.router[root_node][node_id]
 			random_nodes += self.reverse_node(n)
 		
-		random_id = self.id_list[0]
+		my_id = self.id_list[my_port]
 		# random_id = random.choice(self.id_list)
-		reply_msg = {'id':random_id,'token':token,'nodes':random_nodes}
+		reply_msg = {'id':my_id,'token':token,'nodes':random_nodes}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
-		logging.info('reply data:%r' % data)
-		logging.info('reply_get_peers: %s:%d' % (node.IP,node.Port))
-		self.protocol.sendDatagram(data,node.IP,node.Port)
+		logging.debug('reply data:%r' % data)
+		logging.debug('reply_get_peers: %s:%d' % (node.IP,node.Port))
+		self.protocol_list[my_port].sendDatagram(data,node.IP,node.Port)
 		# reactor.stop()
  
  	def XOR(self,s1,s2):
@@ -254,6 +266,8 @@ class NodeService(object):
  		while len(temp_nodes) < 8:
  			now_node = find_root_node(zero_node,root_node)
  			Exclude_LIST.extend(now_node)
+ 			if now_node not in self.router.keys():
+ 				return None
  			temp_nodes.extend([v.NodeID for v in self.router[now_node].values()])
  		# logging.info('after <8===============now has %d temp_nodes' % len(temp_nodes))
 
@@ -311,7 +325,7 @@ class NodeService(object):
 				reactor.stop()
  			return None
  
-	def ProcessData(self,node_info,src_host,src_port):
+	def ProcessData(self,node_info,src_host,src_port,my_port):
 		def parse_ip(ip_str):
 			if len(ip_str) != 4:
 				return None
@@ -325,7 +339,6 @@ class NodeService(object):
 		transaction_ID = ''
 		if 't' in node_info.keys():
 			transaction_ID = node_info['t']
-
  
  		# when receive response of find_node, update the router
 		if node_info['y'] == 'r':
@@ -354,13 +367,11 @@ class NodeService(object):
 					logging.info('receive get_peers %s:%d' % (src_host,src_port))
 					d1 = Deferred()
 					d1.addCallbacks(self.reply_get_peers,self.OnError)
-					d1.callback((transaction_ID,node,node_info['a']['info_hash']))
+					d1.callback((transaction_ID,node,node_info['a']['info_hash'],my_port))
 
 				elif node_info['q'] == 'announce_peer':
 					logging.info('receive announce_peer %s:%d' % (src_host,src_port))
-					logging.info('==========================')
 					logging.info('%r' % node_info['a'])
-					logging.info('==========================')
 					info_hash = node_info['a']['info_hash']
 					port = node_info['a']['port']
 					id = node_info['a']['id']
@@ -370,13 +381,13 @@ class NodeService(object):
 					logging.info('receive find_node %s:%d' % (src_host,src_port))
 					d2 = Deferred()
 					d2.addCallbacks(self.reply_find_node,self.OnError)
-					d2.callback((transaction_ID,node))
+					d2.callback((transaction_ID,node,my_port))
 
 				elif node_info['q'] == 'ping':
 					logging.info('receive ping %s:%d' % (src_host,src_port))
 					d3 = Deferred()
 					d3.addCallbacks(self.reply_ping,self.OnError)
-					d3.callback((transaction_ID,node))
+					d3.callback((transaction_ID,node,my_port))
 
 		elif node_info['y'] == 'e':
 			logging.error('receive error:')
@@ -391,32 +402,35 @@ class NodeService(object):
 		self.tp.send(info_hash)
 
 	def reply_find_node(self,parameter):
-		transaction_ID,node = parameter
+		transaction_ID,node,my_port = parameter
 		closest_dict = self.select_closest(node.NodeID)
 		random_nodes = ''
+
+		if not closest_dict:
+			return
 
 		for node_id in closest_dict:
 			root_node = node_id[0]
 			n = self.router[root_node][node_id]
 			random_nodes += self.reverse_node(n)
 		
-		# random_id = random.choice(self.id_list)
-		random_id = self.id_list[0]
-		reply_msg = {'id':random_id,'nodes':random_nodes}
+		
+		my_id = self.id_list[my_port]
+		reply_msg = {'id':my_id,'nodes':random_nodes}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
-		logging.info('reply data:%r' % data)
-		logging.info('reply_find_node: %s:%d' % (node.IP,node.Port))
-		self.protocol.sendDatagram(data,node.IP,node.Port)
+		logging.debug('reply data:%r' % data)
+		logging.debug('reply_find_node: %s:%d' % (node.IP,node.Port))
+		self.protocol_list[my_port].sendDatagram(data,node.IP,node.Port)
 
 	def reply_ping(self,parameter):
-		transaction_ID,node = parameter
-		# random_id = random.choice(self.id_list)
-		random_id = self.id_list[0]
-		reply_msg = {'id':random_id}
+		transaction_ID,node,my_port = parameter
+		
+		my_id = self.id_list[my_port]
+		reply_msg = {'id':my_id}
 		data = self.query.encode(t=transaction_ID,y='r',r=reply_msg)
-		logging.info('reply data:%r' % data)
-		logging.info('reply_ping: %s:%d' % (node.IP,node.Port))
-		self.protocol.sendDatagram(data,node.IP,node.Port)
+		logging.debug('reply data:%r' % data)
+		logging.debug('reply_ping: %s:%d' % (node.IP,node.Port))
+		self.protocol_list[my_port].sendDatagram(data,node.IP,node.Port)
  
 	def UpdateRouter(self,node):
 		logging.debug(node)
@@ -429,16 +443,22 @@ class NodeService(object):
 		# logging.info(self.router)
  		
 	def deeperSearch(self):	
+		search = 0
 		if len(self.router) != 0:
 			for root_node in self.router.values():
+				if search > 100:
+					break
 				for node in root_node.values():
+					if search > 100:
+						break
 					if node.search_time:
 						self.find_node(node.IP,node.Port)
 						node.search_time -= 1
+						search += 1
 		else:
 			self.find_node(self.begin_host,self.begin_port)
 		
-		reactor.callLater(20,self.deeperSearch)
+		reactor.callLater(60,self.deeperSearch)
  
 	def checkHealthy(self):
 		if len(self.router) != 0:
@@ -450,11 +470,13 @@ class NodeService(object):
 				self.bad_node = 0
  
 			now = datetime.datetime.now()
+			counter = 0
 			# for node in self.router.values():
 			for root_node in self.router.values():
 				for node in root_node.values():
+					counter += 1
 					# 2 minutes no active
-					if (now - node.update_time).seconds > 2*60:
+					if (now - node.update_time).seconds > 5*60:
 						if node.healthy == GOOD:
 							node.healthy = DUBIOUS
 							self.ping(node.IP,node.Port)
@@ -462,8 +484,9 @@ class NodeService(object):
 							node.healthy = BAD
 							self.bad_node += 1
 							# wait to delete
+			logging.info('router has %d nodes now!' % counter)
  
-		reactor.callLater(15,self.checkHealthy)
+		reactor.callLater(30,self.checkHealthy)
  
 	def gotIP(self,ip):
 		logging.debug("%s is %s" % (self.begin_host,ip))
@@ -472,9 +495,12 @@ class NodeService(object):
  
 	def startSearch(self,ip):
 		self.bad_node = 0
-		self.protocol = DHTNodeProtocol(self)
 		logging.info( 'search begin with %s:%s' % (self.begin_host,self.begin_port))
-		reactor.listenUDP(0,self.protocol)
+		for k,v in self.id_list.iteritems():
+			protocol = DHTNodeProtocol(self)
+			self.protocol_list[k] = protocol
+			reactor.listenUDP(k,protocol)
+
 		self.find_node(self.begin_host,self.begin_port)
 		reactor.callWhenRunning(self.deeperSearch)
 		reactor.callWhenRunning(self.checkHealthy)
@@ -574,7 +600,7 @@ def test():
  		description = description.decode(encoding).encode('utf-8')
  		
 	def printResult(result):
-		logging.info('insert [%s] to db success]' % name)
+		logging.info('insert [%s] to db success' % name)
 		if reactor.running:
 			reactor.stop()
 
@@ -597,12 +623,16 @@ class TorrentProcess(protocol.ProcessProtocol):
 
 	def send(self,data):
 		self.transport.write(data)
-		print 'Sent:',data
+		print 'Sent:%r' % data
 		
 	def outReceived(self,data):
 		print '[torrent]:',data
+
 	def errReceived(self,data):
 		print '[torrent error]:',data
+		if reactor.running:
+			reactor.stop()
+
 	def processEnded(self,reason):
 		print 'Process end status',reason.value.exitCode
 		if reactor.running:
@@ -616,5 +646,4 @@ if __name__ == '__main__':
 	# ('router.bitcomet.com'), 6881));
 
 	# test()
-	# main()
-	
+	main()
