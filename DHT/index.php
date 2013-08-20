@@ -6,6 +6,7 @@ header("Content-Type: text/html; charset=utf-8");
 //注意文件的编码格式需要保存为为UTF-8格式
 require ( "sphinxapi.php" );
 require ( "page.php");
+require ( "getConfig.php");
 
 $cl = new SphinxClient ();
 $cl->SetServer ( '127.0.0.1', 9312);
@@ -44,18 +45,24 @@ if ($_GET)
 //$cl->SetMatchMode(SPH_MATCH_EXTENDED);
 //$res=cl->Query( '@title (测试)' , "*");
 //$res=cl->Query( '@title (测试) @content ('网络')' , "*");
+$search_DB_HOST = get_config("./config.php","DB_host");
+$search_DB_USER =  get_config("./config.php","DB_user");
+$search_DB_PASSWORD =  get_config("./config.php","DB_passwd");
 
 function queryContent(&$connection,$query_id)
 {
+	global $search_DB_HOST;
+	global $search_DB_USER;
+	global $search_DB_PASSWORD;
     if ($connection == NULL)
     {
-        $connection = mysql_connect('127.0.0.1','root','05728606z');
+        $connection = mysql_connect($search_DB_HOST,$search_DB_USER,$search_DB_PASSWORD);
         if (!$connection)
             die('Could not connect:'.mysql_error());
 		mysql_query("SET NAMES utf8");
     }
 
-    $result = mysql_query("Select Name,Description,Hash FROM test.dht where Id = $query_id");
+    $result = mysql_query("Select Name,Description,Hash,Updatetime,Rank FROM test.dht where Id = $query_id");
 
     if($result === FALSE) {
         die(mysql_error()); // TODO: better error handling
@@ -85,9 +92,6 @@ function display($keyword,$page,$cl)
 			$response .= 'No Result.';
 		else
 		{
-			//echo '<pre>';
-			//print_r($res);
-			//echo '</pre>';
 			$response .= "<div id='result_count'>找到约".$res['total_found']."条结果（用时 ".$res['time']." 秒）</div>";
     		foreach ($res['matches'] as $ids)
 			{
@@ -102,6 +106,12 @@ function display($keyword,$page,$cl)
 						</span>
 					</div>
 					<div class='tA'>
+						<div class='Pa'>
+							热度:<span>{$row['Rank']}</span>
+						</div>
+						<div class='Gg'>
+							更新时间:<span>{$row['Updatetime']}</span>
+						</div>
 						<div class='fK'>
 							<a href="#" class="button ddb"><span class="label">Files</span><span class="toggle"></span></a>
 							<a href="magnet:?xt=urn:btih:{$row['Hash']}" class="button" title="磁力链接"><span class="icon icon185"></span></a>
@@ -248,6 +258,26 @@ body {
 	overflow:hidden;
 }
 
+.Gg {
+	height:39px;
+	line-height:39px;
+	float:left;
+	margin-left:10px;
+	overflow:hidden;
+	font-size:13px;
+	color:#999;
+}
+
+.Pa {
+	height:39px;
+	line-height:39px;
+	float:left;
+	margin-left:10px;
+	overflow:hidden;
+	font-size:13px;
+	color:#999;
+}
+
 dd {
 	margin-left:20px;
 	overflow:hidden;
@@ -352,8 +382,8 @@ dd:hover {
 		var keyword = $('#search_text').attr('value');
 		url = '?page='+page+'&q='+keyword;
 		$.get(url,function(data){
-			$('#Content').text('');
-			$('#Content').append(data);
+			$('#container').text('');
+			$('#container').append(data);
 			$('body').animate({scrollTop:0}, 'slow'); 
 			$('.iP').highlight(keyword);
 		});
@@ -372,9 +402,9 @@ dd:hover {
 			<button class="action blue search_button"><span class="label">Search</span></button>
 		</form>
 	</div>
-<?php
-	echo display($keyword,1,$cl);
-?>
+	<div id="container">
+		<?php echo display($keyword,1,$cl); ?>
+	</div>
 <div style='display:none;'>
 <script language="javascript" type="text/javascript" src="http://js.users.51.la/16206355.js"></script>
 <noscript><a href="http://www.51.la/?16206355" target="_blank"><img alt="&#x6211;&#x8981;&#x5566;&#x514D;&#x8D39;&#x7EDF;&#x8BA1;" src="http://img.users.51.la/16206355.asp" style="border:none" /></a></noscript>
