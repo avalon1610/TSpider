@@ -114,7 +114,10 @@ function display($keyword,$page,$cl)
 						</div>
 						<div class='fK'>
 							<a href="#" class="button ddb"><span class="label">Files</span><span class="toggle"></span></a>
+							<!--
 							<a href="magnet:?xt=urn:btih:{$row['Hash']}" class="button" title="磁力链接"><span class="icon icon185"></span></a>
+							-->
+							<a href="#" class="button magnet" title="磁力链接"><span class="icon icon185"></span></a>
 						</div>
 					</div>
 				</div> <!--mM-->
@@ -300,6 +303,11 @@ dd:hover {
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script src="jquery.highlight.js"></script>
 <script>
+	$(document).on('click','.magnet',function(){
+		$.get('/Auth.php',function(data){
+			$('#container').append(data);
+		});
+	});
 	$(document).on('click','.dropdown .ddb,.sF',function(){
 		var b_click_fbutton = true;
 		if ($(this).attr('class') == 'sF')
