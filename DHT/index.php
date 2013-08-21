@@ -2,6 +2,8 @@
 ini_set('display_errors', true);
 error_reporting(E_ALL);
 header("Content-Type: text/html; charset=utf-8");
+$memcache = new Memcached();
+$memcache->addServer('127.0.0.1',11211);
 
 //注意文件的编码格式需要保存为为UTF-8格式
 require ( "sphinxapi.php" );
@@ -35,9 +37,12 @@ $page = 1;
 
 if ($_GET)
 {
-    $keyword = $_GET['q'];
+	if (array_key_exists('q',$_GET))
+   		$keyword = $_GET['q'];
 	if (array_key_exists('page',$_GET))
 		$page = $_GET['page'];
+	if (array_key_exists('auth',$_GET))
+		$auth = $_GET['auth'];
 }
 
 
@@ -81,6 +86,7 @@ function isAjax()
 
 function display($keyword,$page,$cl)
 {
+	global $memcache;
 	$response = "";
 	if ($keyword)
 	{
@@ -95,7 +101,17 @@ function display($keyword,$page,$cl)
 			$response .= "<div id='result_count'>找到约".$res['total_found']."条结果（用时 ".$res['time']." 秒）</div>";
     		foreach ($res['matches'] as $ids)
 			{
-	        	$row = queryContent($connection,$ids['id']);
+				if (!($row = $memcache->get($ids['id'])))
+				{
+					if ($memcache->getResultCode() == Memcached::RES_NOTSTORED ||
+						$memcache->getResultCode() == Memcached::RES_NOTFOUND)
+					{
+	        			$row = queryContent($connection,$ids['id']);
+						$memcache->set($ids['id'],$row);
+					}
+					else
+						die("memcache error:".$memcache->getResultCode());
+				}
 
 				$response .= <<<EOT
 				<div class='iP dropdown'>
@@ -117,7 +133,7 @@ function display($keyword,$page,$cl)
 							<!--
 							<a href="magnet:?xt=urn:btih:{$row['Hash']}" class="button" title="磁力链接"><span class="icon icon185"></span></a>
 							-->
-							<a href="#" class="button magnet" title="磁力链接"><span class="icon icon185"></span></a>
+							<a id="{$ids['id']}" href="#" class="button magnet" title="磁力链接"><span class="icon icon185"></span></a>
 						</div>
 					</div>
 				</div> <!--mM-->
@@ -168,7 +184,12 @@ EOT;
 //handle ajax request, changing page etc.
 if (isAjax())
 {
-	echo display($keyword,$page,$cl);
+	if (array_key_exists('auth',$_GET))
+	{
+		echo showAuth();	
+	}
+	else
+		echo display($keyword,$page,$cl);
 	return;
 }
 
@@ -298,16 +319,22 @@ dd:hover {
 .page a{float:left;margin:0 3px;border:1px solid #ddd;padding:3px 7px; text-decoration:none;color:#666}
 .page a.now_page,#page a:hover{color:#fff;background:#05c}
 
+#AuthFloating {
+	position:fixed;
+	width:331px;
+	height:275px;
+	top:50%;
+	left:50%;
+	margin:-100px 0 0 -150px;
+	z-index:1;
+	-webkit-backface-visibility:hidden;
+	-webkit-transform: translateZ(0);
+}
 </style>
 
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script src="jquery.highlight.js"></script>
 <script>
-	$(document).on('click','.magnet',function(){
-		$.get('/Auth.php',function(data){
-			$('#container').append(data);
-		});
-	});
 	$(document).on('click','.dropdown .ddb,.sF',function(){
 		var b_click_fbutton = true;
 		if ($(this).attr('class') == 'sF')
@@ -374,15 +401,35 @@ dd:hover {
 
 	// Close open dropdown slider by clicking elsewhwere on page
 	$(document).bind('click', function (e) {
-		if (e.target.id != $('.dropdown').attr('class')) {
-			$('.dropdown-slider').slideUp();
-			$('span.toggle').removeClass('active');
+		$('.dropdown-slider').slideUp();
+		$('span.toggle').removeClass('active');
+		
+		if (!$(e.srcElement||e.target).is("#AuthFloating,#AuthFloating *")) {
+			$('#AuthFloating').remove();
 		}
 	});
 
 	$(document).ready(function(){
 		var keyword = $('#search_text').attr('value');
 		$('.dF').highlight(keyword);
+	});
+
+	$(document).on('click','.magnet',function(e){
+		$('#AuthFloating').remove();
+		var id = $(this).attr('id');
+		url = '?auth='+id;
+		$.get(url,function(data){
+			$('#container').before(data);
+			$('#confirm').attr('value',id);
+		});
+	});
+
+	$(document).on('click','#confirm',function(e){
+		query_id = $('#confirm').val();
+		$.post('Auth.php',{id:query_id},function(result){
+			alert(result);
+		});
+		$('#AuthFloating').remove();
 	});
 
 	function goToPage(page)
@@ -398,9 +445,6 @@ dd:hover {
 	}
 
 </script>
-<script>u_key='377509'</script>
-<script src="http://j.union.ijinshan.com/m.js"></script>
-
 <title>搜种子网</title>
 </head>
 <body>
@@ -413,10 +457,48 @@ dd:hover {
 	<div id="container">
 		<?php echo display($keyword,1,$cl); ?>
 	</div>
-<div style='display:none;'>
-<script language="javascript" type="text/javascript" src="http://js.users.51.la/16206355.js"></script>
-<noscript><a href="http://www.51.la/?16206355" target="_blank"><img alt="&#x6211;&#x8981;&#x5566;&#x514D;&#x8D39;&#x7EDF;&#x8BA1;" src="http://img.users.51.la/16206355.asp" style="border:none" /></a></noscript>
-</div>
+<?php
+function showAuth()
+{
+	$res = <<<EOT
+	<div id='AuthFloating'>
+		<script type='text/javascript'>
+		function YXM_valided_true()
+	  	{
+			$('#confirm').slideToggle('fast');
+		}
+		function YXM_valided_false()
+	  	{
+			$('#confirm').slideUp();
+		}
+		</script>
+		<script type='text/javascript'>
+		var YXM_PUBLIC_KEY = 'aa35d82e53f29c3cfb7cf855dff2eede';//这里填写PUBLIC_KEY
+		var YXM_localsec_url = 'http://127.0.0.1/localsec/';//这里设置应急策略路径
+		function YXM_local_check()
+		{
+			if(typeof(YinXiangMaDataString)!='undefined')return;
+		   	YXM_oldtag = document.getElementById('YXM_script');
+		   	var YXM_local=document.createElement('script');
+			YXM_local.setAttribute("type","text/javascript");
+			YXM_local.setAttribute("id","YXM_script");
+			YXM_local.setAttribute("src",YXM_localsec_url+'yinxiangma.js?pk='+YXM_PUBLIC_KEY+'&v=YinXiangMa_PHPSDK_4.0');
+			YXM_oldtag.parentNode.replaceChild(YXM_local,YXM_oldtag);
+		}
+		setTimeout("YXM_local_check()",3000);
+		$('#YXM').html("<input type='hidden' id='YXM_here' /><script type='text/javascript' charset='gbk' id='YXM_script' src='http://api.yinxiangma.com/api3/yzm.yinxiangma.php?pk="+YXM_PUBLIC_KEY+"&v=YinXiangMaPHPSDK_4.0'><"+"/script>");
+		</script>
+		<div id='YXM'></div>
+		<button id='confirm' class='action blue' style='width:320px;display:none;'><span class='label' style='float:center;'>点击下载</span></button>
+	</div>
+EOT;
+	return $res;
+}
+?>
+	<div style='display:none;'>
+		<script language="javascript" type="text/javascript" src="http://js.users.51.la/16206355.js"></script>
+		<noscript><a href="http://www.51.la/?16206355" target="_blank"><img alt="&#x6211;&#x8981;&#x5566;&#x514D;&#x8D39;&#x7EDF;&#x8BA1;" src="http://img.users.51.la/16206355.asp" style="border:none" /></a></noscript>
+	</div>
 </body>
 </html>
 
