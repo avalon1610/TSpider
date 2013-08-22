@@ -130,10 +130,7 @@ function display($keyword,$page,$cl)
 						</div>
 						<div class='fK'>
 							<a href="#" class="button ddb"><span class="label">Files</span><span class="toggle"></span></a>
-							<!--
-							<a href="magnet:?xt=urn:btih:{$row['Hash']}" class="button" title="磁力链接"><span class="icon icon185"></span></a>
-							-->
-							<a id="{$ids['id']}" href="#" class="button magnet" title="磁力链接"><span class="icon icon185"></span></a>
+							<a id="{$ids['id']}" class="button magnet" title="磁力链接"><span class="icon icon185"></span></a>
 						</div>
 					</div>
 				</div> <!--mM-->
@@ -335,6 +332,7 @@ dd:hover {
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script src="jquery.highlight.js"></script>
 <script>
+	var t;
 	$(document).on('click','.dropdown .ddb,.sF',function(){
 		var b_click_fbutton = true;
 		if ($(this).attr('class') == 'sF')
@@ -405,7 +403,11 @@ dd:hover {
 		$('span.toggle').removeClass('active');
 		
 		if (!$(e.srcElement||e.target).is("#AuthFloating,#AuthFloating *")) {
-			$('#AuthFloating').remove();
+			if (('#AuthFloating').length>0)
+			{
+				$('#AuthFloating').remove();
+				clearTimeout(t);
+			}
 		}
 	});
 
@@ -415,9 +417,15 @@ dd:hover {
 	});
 
 	$(document).on('click','.magnet',function(e){
-		$('#AuthFloating').remove();
+		if (e.target.href)
+			return;
+		if ($('#AuthFloating').length>0)
+		{
+			$('#AuthFloating').remove();
+			clearTimeout(t);
+		}
 		var id = $(this).attr('id');
-		url = '?auth='+id;
+		url = "?auth='"+id+"'"+"&t='"+(new Date().getTime())+"'";
 		$.get(url,function(data){
 			$('#container').before(data);
 			$('#confirm').attr('value',id);
@@ -426,10 +434,16 @@ dd:hover {
 
 	$(document).on('click','#confirm',function(e){
 		query_id = $('#confirm').val();
-		$.post('Auth.php',{id:query_id},function(result){
-			alert(result);
+		challenge = $('#YinXiangMa_challenge').val();
+		level = $('#YXM_level').val();
+		result = $('#YXM_input_result').val();
+		query_data = {id:query_id,YinXiangMa_challenge:challenge,YXM_level:level,YXM_input_result:result};
+		$.post('Auth.php',query_data,function(result){
+			$(('#'+query_id)).attr('href',result);
+			$(('#'+query_id)).get(0).click();
 		});
 		$('#AuthFloating').remove();
+		clearTimeout(t);
 	});
 
 	function goToPage(page)
@@ -485,7 +499,7 @@ function showAuth()
 			YXM_local.setAttribute("src",YXM_localsec_url+'yinxiangma.js?pk='+YXM_PUBLIC_KEY+'&v=YinXiangMa_PHPSDK_4.0');
 			YXM_oldtag.parentNode.replaceChild(YXM_local,YXM_oldtag);
 		}
-		setTimeout("YXM_local_check()",3000);
+		t = setTimeout("YXM_local_check()",3000);
 		$('#YXM').html("<input type='hidden' id='YXM_here' /><script type='text/javascript' charset='gbk' id='YXM_script' src='http://api.yinxiangma.com/api3/yzm.yinxiangma.php?pk="+YXM_PUBLIC_KEY+"&v=YinXiangMaPHPSDK_4.0'><"+"/script>");
 		</script>
 		<div id='YXM'></div>
