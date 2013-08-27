@@ -37,7 +37,8 @@ class torrent(basic.LineReceiver):
 		filename = ''
 		for i in info_hash:
 			filename += ('%02X' % ord(i))
-		# filename = info_hash
+		if (len(filename) > 40):
+			filename = filename[0:40]
 		header = filename[0:2]
 		tailer = filename[-2:]
 		Hash = filename
