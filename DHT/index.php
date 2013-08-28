@@ -114,6 +114,9 @@ function display($keyword,$page,$cl)
 				}
 
 				$response .= <<<EOT
+				<script>
+				$('#search_bar').removeClass('firstshow');
+				</script>
 				<div class='iP dropdown'>
 				<div class='mM'>
 					<div class='dF'>
@@ -157,23 +160,6 @@ EOT;
 		}
 
 		$response .= "</div><!--class Content-->";
-		/*
-		$response .= <<<EOT
-			<div class='adv' style='float:right;width:300px;'>
-				<script src="http://union.minigy.com/page/s.php?s=80092&w=300&h=250"></script>
-				<script>
-				(function(){
-				 	var referer = '';
-						if (window.parent!=window.self){
-								try{referer=parent.document.referer;}
-										catch(e){referer=document.referer;}}
-											else{referer=document.referer}
-												document.writeln('<iframe frameborder="0" scrolling="no" marginheight="0" width="300" height="300" marginwidth="0" src="http://union.rizhifu.com/adsIndex.php?adsid=16780&referer='+referer+'"></iframe>');
-												})();
-				</script>
-			</div>
-EOT;
-*/
 	}
 	return $response;
 }
@@ -327,6 +313,13 @@ dd:hover {
 	-webkit-backface-visibility:hidden;
 	-webkit-transform: translateZ(0);
 }
+
+.firstshow {
+	position:absolute;
+	top:50%;
+	left:50%;
+	margin:-20px 0 0 -280px;
+}
 </style>
 
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
@@ -462,7 +455,7 @@ dd:hover {
 <title>搜种子网</title>
 </head>
 <body>
- 	<div id='search_bar'>
+ 	<div id='search_bar' class='firstshow'>
 		<form method='get'>
 			<input type='text' id='search_text' name='q' value='<?php echo $keyword;?>' />
 			<button class="action blue search_button"><span class="label">Search</span></button>
